@@ -22,8 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform: [linux/amd64, linux/arm64, linux/arm/v7]
-        tag: [latest-amd64, latest-arm64, latest-armv7]
+        include:
+          - platform: linux/amd64
+            tag: latest-amd64
+          - platform: linux/arm64
+            tag: latest-arm64
+          - platform: linux/arm/v7
+            tag: latest-armv7
     permissions:
       contents: read
       packages: write
@@ -31,6 +36,9 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+
+      - name: Show build context content (debug)
+        run: ls -la && cat package.json
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
