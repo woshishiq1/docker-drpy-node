@@ -1,19 +1,13 @@
-FROM node:22-alpine AS builder
-
-RUN apk add --no-cache python3 build-base
+# 1. 依赖安装阶段
+FROM node:22-alpine AS deps
 
 WORKDIR /app
 
-# 只复制 package.json 和 yarn.lock
 COPY package.json yarn.lock ./
 
-# 安装运行时依赖（含 puppeteer）
-RUN yarn install --production \
-  && yarn add puppeteer --production
+RUN yarn install --production
 
-# 或者先安装所有依赖，再用 --production 清理非生产依赖
-# RUN yarn && yarn install --production
-
+# 2. 运行阶段
 FROM node:22-alpine
 
 RUN apk add --no-cache tini \
@@ -21,13 +15,12 @@ RUN apk add --no-cache tini \
 
 WORKDIR /app
 
-# 只复制 node_modules 和 package.json，不复制源码
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
 
 EXPOSE 5757
 
 ENTRYPOINT ["/sbin/tini", "--"]
 
-# 这里假设宿主机源码挂载到 /app/src，所以执行命令要改成：
+# 源码目录挂载在 /app/src，运行入口改为 /app/src/index.js
 CMD ["node", "src/index.js"]
