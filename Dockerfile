@@ -29,4 +29,4 @@ EXPOSE 5757
 
 ENTRYPOINT ["/sbin/tini", "--"]
 
-CMD ["node", "src/index.js"]
+CMD ["node", "index.js"]
