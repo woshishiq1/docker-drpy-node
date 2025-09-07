@@ -27,13 +27,13 @@ WORKDIR /app
 # 安装 Python 依赖
 RUN set -ex \
   && echo -e "requests\nlxml\npycryptodome\nujson\npyquery\njsonpath\njson5\njinja2\ncachetools\npympler" > /app/spider/py/base/requirements.txt \
-  && pip3 install -r /app/spider/py/base/requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple \
+  && pip3 install --break-system-packages -r /app/spider/py/base/requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple \
   && rm -rf /root/.cache/pip
 # 创建 config/env.json 文件
 RUN set -ex \
   && mkdir -p /app/config \
   && echo '{"ali_token": "", "ali_refresh_token": "", "quark_cookie": "", "uc_cookie": "", "bili_cookie": "", "thread": "10", "enable_dr2": "1", "enable_py": "2", "enable_cat": "2"}' > /app/config/env.json
-# 确认 .env 文件存在
+#  netwerk 确认 .env 文件存在
 RUN ls -la /app/.env
 EXPOSE 5757
 ENTRYPOINT ["/sbin/tini", "--"]
