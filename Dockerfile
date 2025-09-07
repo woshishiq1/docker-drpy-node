@@ -25,11 +25,9 @@ RUN set -ex \
      py3-pip \
      py3-setuptools \
      py3-wheel \
+     build-base \
      libxml2-dev \
      libxslt-dev \
-     gcc \
-     musl-dev \
-     libc-dev \
      libffi-dev \
      tini \
   && rm -rf /tmp/* /var/cache/apk/*
