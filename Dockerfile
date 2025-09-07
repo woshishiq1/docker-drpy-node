@@ -37,7 +37,8 @@ RUN set -ex \
   && mkdir -p /app/spider/py/base \
   && echo -e "requests\nlxml\npycryptodome\nujson\npyquery\njsonpath\njson5\njinja2\ncachetools\npympler" > /app/spider/py/base/requirements.txt \
   && . /app/.venv/bin/activate \
-  && pip3 install -r /app/spider/py/base/requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple \
+  && pip3 install --upgrade pip \
+  && pip3 install -r /app/spider/py/base/requirements.txt \
   && rm -rf /root/.cache/pip
 # 配置 .env 文件
 RUN set -ex \
