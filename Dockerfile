@@ -1,3 +1,4 @@
+# 构建器阶段
 FROM node:22-alpine AS builder
 RUN set -ex \
   && apk add --update --no-cache \
@@ -13,27 +14,35 @@ RUN set -ex \
   && yarn add puppeteer
 # 查看 .env.development 文件是否存在
 RUN ls -la /app/.env.development
-# 重命名 .env.development 为 .env
-RUN mv /app/.env.development /app/.env
+# 复制到临时目录
+RUN mkdir -p /tmp/drpys && cp -r /app/. /tmp/drpys/
+
+# 运行器阶段
 FROM node:22-alpine
 RUN set -ex \
   && apk add --update --no-cache \
      python3 \
      py3-pip \
-     tini \
+     py3-setuptools \
+     py3-wheel \
      libxml2-dev \
      libxslt-dev \
+     tini \
   && rm -rf /tmp/* /var/cache/apk/*
-COPY --from=builder /app /app
 WORKDIR /app
-# 安装 Python 依赖
+COPY --from=builder /tmp/drpys/. /app
+# 创建 Python 虚拟环境并安装依赖
 RUN set -ex \
+  && python3 -m venv /app/.venv \
   && mkdir -p /app/spider/py/base \
   && echo -e "requests\nlxml\npycryptodome\nujson\npyquery\njsonpath\njson5\njinja2\ncachetools\npympler" > /app/spider/py/base/requirements.txt \
-  && ls -la /app/spider/py/base
-RUN set -ex \
-  && pip3 install --break-system-packages -r /app/spider/py/base/requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple \
+  && . /app/.venv/bin/activate \
+  && pip3 install -r /app/spider/py/base/requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple \
   && rm -rf /root/.cache/pip
+# 配置 .env 文件
+RUN set -ex \
+  && mv /app/.env.development /app/.env \
+  && sed -i 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' /app/.env
 # 创建 config/env.json 文件
 RUN set -ex \
   && mkdir -p /app/config \
