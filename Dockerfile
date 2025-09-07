@@ -1,4 +1,3 @@
-# 构建阶段
 FROM node:22-alpine AS builder
 
 RUN set -ex \
@@ -6,7 +5,10 @@ RUN set -ex \
      git \
      build-base \
      python3-dev \
-     py3-pip
+     py3-pip \
+     libxml2-dev \
+     libxslt-dev \
+     openssl-dev
 
 WORKDIR /app
 
@@ -17,7 +19,7 @@ RUN set -ex \
   && yarn && yarn add puppeteer
 
 # 安装 Python 依赖
-RUN pip3 install --no-cache-dir -r spider/py/base/requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple
+RUN pip3 install --no-cache-dir -r spider/py/base/requirements.txt -i https://pypi.org/simple
 
 # 查看 .env.development 文件是否存在
 RUN ls -la /app/.env.development
