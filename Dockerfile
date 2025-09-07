@@ -27,18 +27,30 @@ RUN set -ex \
      py3-wheel \
      libxml2-dev \
      libxslt-dev \
+     gcc \
+     musl-dev \
+     libc-dev \
+     libffi-dev \
      tini \
   && rm -rf /tmp/* /var/cache/apk/*
 WORKDIR /app
 COPY --from=builder /tmp/drpys/. /app
-# 创建 Python 虚拟环境并安装依赖
+# 创建 Python 虚拟环境
 RUN set -ex \
-  && python3 -m venv /app/.venv \
+  && python3 -m venv /app/.venv
+# 创建 requirements.txt
+RUN set -ex \
   && mkdir -p /app/spider/py/base \
   && echo -e "requests\nlxml\npycryptodome\nujson\npyquery\njsonpath\njson5\njinja2\ncachetools\npympler" > /app/spider/py/base/requirements.txt \
+  && ls -la /app/spider/py/base
+# 安装 Python 依赖
+RUN set -ex \
   && . /app/.venv/bin/activate \
-  && pip3 install --upgrade pip \
-  && pip3 install -r /app/spider/py/base/requirements.txt \
+  && pip3 install --upgrade pip
+RUN set -ex \
+  && . /app/.venv/bin/activate \
+  && pip3 install -r /app/spider/py/base/requirements.txt
+RUN set -ex \
   && rm -rf /root/.cache/pip
 # 配置 .env 文件
 RUN set -ex \
