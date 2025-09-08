@@ -2,7 +2,7 @@ name: Docker Publish
 
 on:
   schedule:
-    - cron: '00 1 * * *'
+    - cron: '00 1 * * *' # 每天北京时间上午 9 点
   workflow_dispatch:
 
 env:
@@ -10,20 +10,11 @@ env:
   IMAGE_NAME: woshi17/docker-drpy-node
 
 jobs:
-  build-matrix:
+  build-multiarch:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - platform: linux/amd64
-            tag: latest-amd64
-            target: runner-amd64
-          - platform: linux/arm64
-            tag: latest-arm64
-            target: runner-arm64
-          - platform: linux/arm/v7
-            tag: latest-armv7
-            target: runner-armv7
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -40,32 +31,13 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build and push multi-arch image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
-          target: ${{ matrix.target }}
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag }}
-
-  combine-images:
-    runs-on: ubuntu-latest
-    needs: build-matrix
-    steps:
-      - name: Log into Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USER }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
-
-      - name: Create and push manifest list
-        uses: Noelware/docker-manifest-action@0.4.3
-        with:
-          inputs: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64,
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64,
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-armv7
-          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            # 可以传递 Dockerfile 构建参数（如果需要）
