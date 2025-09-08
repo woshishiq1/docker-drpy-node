@@ -46,6 +46,10 @@ COPY --from=builder-arm64 /tmp/drpys/. /app
 FROM arm32v7/debian:bullseye-slim AS runner-armv7
 WORKDIR /app
 COPY --from=builder-armv7 /tmp/drpys/. /app
+# 安装 Python3 + pip（保证 pip3 可用）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-dev build-essential libffi-dev libssl-dev tini && \
+    rm -rf /var/lib/apt/lists/*
 
 # =======================
 # 公共配置
@@ -55,18 +59,15 @@ RUN cp /app/.env.development /app/.env && \
     rm -f /app/.env.development && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
-# 安装 Node 和 tini
-# runner-armv7 用 Debian，其他用 Alpine
-RUN apk add --no-cache nodejs tini || apt-get update && apt-get install -y --no-install-recommends nodejs tini && rm -rf /var/lib/apt/lists/*
-
-# 安装 Python 依赖
-# amd64 / arm64 用 venv
+# amd64 / arm64 安装 Node + venv
 RUN if [ "$(uname -m)" != "armv7l" ]; then \
+      apk add --no-cache nodejs tini && \
       python3 -m venv /app/.venv && \
       . /app/.venv/bin/activate && \
       pip3 install --upgrade pip setuptools wheel && \
       pip3 install -r /app/spider/py/base/requirements.txt; \
     else \
+      # armv7 已经在 runner-armv7 安装 pip3
       pip3 install --upgrade pip setuptools wheel && \
       pip3 install -r /app/spider/py/base/requirements.txt; \
     fi
