@@ -1,36 +1,41 @@
-FROM node:20-slim AS builder
-# or FROM node:20-bookworm-slim
+FROM node:22-alpine AS builder
 
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN set -ex \
+  && apk add --update --no-cache \
+     git \
+     build-base \
+     python3-dev
+
 WORKDIR /app
-RUN git clone https://github.com/hjdhnx/drpy-node.git .
-RUN yarn && yarn add puppeteer
-RUN mkdir -p /tmp/drpys && cp -r /app/. /tmp/drpys/
+
+RUN set -ex \
+  && git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
+  && npm install -g pm2 \
+  && yarn \
+  && yarn add puppeteer
+
+# 查看 .env.development 文件是否存在
+RUN ls -la /app/.env.development
+
+# 重命名 .env.development 为 .env
+RUN mv /app/.env.development /app/.env
 
 
-FROM node:20-slim AS runner
+FROM node:22-alpine
+
+COPY --from=builder /app /app
+
+RUN set -ex \
+  && apk add --update --no-cache \
+     tini \
+  && rm -rf /tmp/* /var/cache/apk/*
+
 WORKDIR /app
-COPY --from=builder /tmp/drpys/. /app
 
-RUN cp /app/.env.development /app/.env && \
-    rm -f /app/.env.development && \
-    sed -i 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app|' /app/.env && \
-    echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
-
-# 安装 Python3 + pip
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
-    build-essential \
-    libffi-dev \
-    libssl-dev \
-    libjpeg-dev \
-    zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip3 install --upgrade pip setuptools wheel && \
-    pip3 install -r /app/spider/py/base/requirements.txt
+# 确认 .env 文件存在
+RUN ls -la /app/.env
 
 EXPOSE 5757
+
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "index.js"]
