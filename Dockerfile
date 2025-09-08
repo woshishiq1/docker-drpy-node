@@ -3,24 +3,22 @@
 # =======================
 FROM node:20-alpine AS builder
 
-# 安装git
+# 安装 git
 RUN apk add --no-cache git
 
-# 如果需要强制HTTP/1.1
+# 强制 HTTP/1.1（可选）
 RUN git config --global http.version HTTP/1.1
 
-# 工作目录
 WORKDIR /app
 
-# 克隆仓库源码
+# 克隆仓库
 RUN git clone https://github.com/hjdhnx/drpy-node.git .
 
-# 安装依赖（包括 puppeteer）
+# 安装依赖（含 puppeteer）
 RUN yarn && yarn add puppeteer
 
-# 复制文件到临时目录，供 runner 阶段使用
-RUN mkdir -p /tmp/drpys && \
-    cp -r /app/. /tmp/drpys/
+# 拷贝文件到临时目录
+RUN mkdir -p /tmp/drpys && cp -r /app/. /tmp/drpys/
 
 
 # =======================
@@ -28,13 +26,12 @@ RUN mkdir -p /tmp/drpys && \
 # =======================
 FROM alpine:latest AS runner
 
-# 工作目录
 WORKDIR /app
 
-# 复制构建产物
+# 拷贝构建产物
 COPY --from=builder /tmp/drpys/. /app
 
-# 处理 .env 配置
+# .env 配置
 RUN cp /app/.env.development /app/.env && \
     rm -f /app/.env.development && \
     sed -i 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' /app/.env && \
@@ -44,15 +41,18 @@ RUN cp /app/.env.development /app/.env && \
 RUN apk add --no-cache nodejs
 
 # 安装 Python3 + venv 支持
-RUN apk add --no-cache python3 py3-pip py3-setuptools py3-wheel py3-virtualenv
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    py3-setuptools \
+    py3-wheel \
+    python3-venv
 
-# 创建虚拟环境并安装 Python 依赖
+# 创建虚拟环境并安装依赖
 RUN python3 -m venv /app/.venv && \
     /app/.venv/bin/pip install --upgrade pip setuptools wheel && \
     /app/.venv/bin/pip install -r /app/spider/py/base/requirements.txt
 
-# 暴露端口
 EXPOSE 5757
 
-# 启动命令
 CMD ["node", "index.js"]
