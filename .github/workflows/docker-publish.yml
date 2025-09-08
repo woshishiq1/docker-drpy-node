@@ -1,22 +1,27 @@
-name: Docker Publish
+name: build-docker
 
 on:
-  schedule:
-    - cron: '00 1 * * *'  # 每天北京时间上午9点执行
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
 
 env:
+  # 1. 修改注册中心为 Docker Hub
   REGISTRY: docker.io
-  IMAGE_NAME: woshi17/docker-drpy-node  # Docker Hub 用户名/仓库名
+  # 2. 修改为你自己的镜像名称
+  IMAGE_NAME: woshi17/docker-drpy-node
 
 jobs:
-  build-and-push:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: write
 
     steps:
-      - name: Checkout source code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up QEMU
@@ -25,7 +30,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log into Docker Hub
+      # 3. 修改登录步骤以使用 Docker Hub 凭证
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -38,13 +44,22 @@ jobs:
           VERSION=$(jq -r '.version' package.json)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push multi-platform image
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # 这里会自动使用上面 env 中定义的新镜像名
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.pkg.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.pkg.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
