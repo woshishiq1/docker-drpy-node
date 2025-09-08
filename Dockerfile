@@ -2,55 +2,43 @@
 # 构建阶段
 # ------------------------
 ARG TARGETARCH
-# amd64 / arm64 用 Alpine
+
+# ---------- amd64 / arm64 builder ----------
 FROM node:20-alpine AS builder-alpine
-# armv7 用 Debian slim
-FROM node:20-bullseye-slim AS builder-debian
-
-# 根据架构选择 builder
-FROM ${TARGETARCH##*armv7} AS builder
-
-# ---------- 公共步骤 ----------
 WORKDIR /app
-
-# 安装基础依赖
-# Alpine builder
-RUN if [ "$TARGETARCH" != "armv7" ]; then \
-      apk add --no-cache git python3 py3-pip py3-setuptools py3-wheel build-base; \
-    fi
-
-# Debian builder
-RUN if [ "$TARGETARCH" = "armv7" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends \
-        git python3 python3-pip python3-venv python3-dev build-essential libffi-dev libssl-dev && \
-      rm -rf /var/lib/apt/lists/*; \
-    fi
-
-# 克隆源码
+RUN apk add --no-cache git python3 py3-pip py3-setuptools py3-wheel build-base
 RUN git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git .
-
-# 安装 Node 依赖
 RUN yarn && yarn add puppeteer
+RUN mkdir -p /tmp/drpys && cp -r /app/. /tmp/drpys/
 
-# 复制临时目录
+# ---------- armv7 builder ----------
+FROM arm32v7/node:20-bullseye-slim AS builder-armv7
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git python3 python3-pip python3-venv python3-dev build-essential libffi-dev libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git .
+RUN yarn && yarn add puppeteer
 RUN mkdir -p /tmp/drpys && cp -r /app/. /tmp/drpys/
 
 # ---------- 运行阶段 ----------
+# 根据 TARGETARCH 选择不同 runner
 FROM alpine:latest AS runner-alpine
-FROM debian:bullseye-slim AS runner-debian
+FROM debian:bullseye-slim AS runner-armv7
 
-FROM ${TARGETARCH##*armv7} AS runner
-
+# ------------------------
+# 选择阶段
+# ------------------------
+FROM runner-${TARGETARCH} AS runner
 WORKDIR /app
+COPY --from=builder-${TARGETARCH} /tmp/drpys/. /app
 
-COPY --from=builder /tmp/drpys/. /app
-
-# 处理 .env 文件
+# 处理 .env 和 config
 RUN cp /app/.env.development /app/.env && \
     rm -f /app/.env.development && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
-# 安装 Node.js（Alpine 和 Debian）
+# 安装 Node
 RUN if [ "$TARGETARCH" != "armv7" ]; then \
       apk add --no-cache nodejs tini; \
     else \
@@ -70,6 +58,5 @@ RUN if [ "$TARGETARCH" != "armv7" ]; then \
     fi
 
 EXPOSE 5757
-
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "index.js"]
