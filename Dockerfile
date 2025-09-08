@@ -1,57 +1,49 @@
 # ===========================
-# 1. 构建阶段
+# 1. 构建阶段 (有完整工具链)
 # ===========================
 FROM node:22-alpine AS builder
 
 RUN set -ex \
-  && apk add --update --no-cache \
+  && apk add --no-cache \
      git \
      build-base \
-     python3-dev
-
-WORKDIR /app
-
-# 拉取源码 & 安装 Node 依赖
-RUN set -ex \
-  && git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
-  && npm install -g pm2 \
-  && yarn \
-  && yarn add puppeteer
-
-# ===========================
-# 2. 运行阶段
-# ===========================
-FROM node:22-alpine
-
-# 拷贝构建产物
-COPY --from=builder /app /app
-
-# 安装运行依赖 + 编译工具链（armv7 必须要有）
-RUN set -ex \
-  && apk add --update --no-cache \
-     tini \
-     nodejs \
      python3 \
      py3-pip \
      py3-setuptools \
      py3-wheel \
-     gcc \
-     g++ \
-     musl-dev \
-     make \
-  && rm -rf /tmp/* /var/cache/apk/*
+     python3-dev
 
 WORKDIR /app
+
+# 拉取源码 & 安装依赖
+RUN git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
+  && npm install -g pm2 \
+  && yarn install --production \
+  && yarn add puppeteer \
+  && pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt -t /app/pydeps
+
+# ===========================
+# 2. 运行阶段 (无工具链)
+# ===========================
+FROM node:22-alpine
+
+RUN set -ex \
+  && apk add --no-cache \
+     tini \
+     python3 \
+     py3-pip
+
+WORKDIR /app
+
+# 复制构建产物
+COPY --from=builder /app /app
+COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=builder /app/pydeps /usr/local/lib/python3.12/site-packages
 
 # 处理 env 配置
 RUN cp /app/.env.development /app/.env && \
     rm -f /app/.env.development && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
-
-# Python 依赖（直接系统安装，不用 venv）
-RUN pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt && \
-    # 安装完成后清理编译工具链，减小镜像体积
-    apk del gcc g++ musl-dev make || true
 
 EXPOSE 5757
 
