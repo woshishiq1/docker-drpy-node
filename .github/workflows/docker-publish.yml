@@ -1,28 +1,44 @@
-name: build-docker
+name: Docker Publish
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - v*
+  schedule:
+    - cron: '00 1 * * *'  # 每天北京时间上午9点执行
+  workflow_dispatch:
 
 env:
-  # 1. 修改注册中心为 Docker Hub
   REGISTRY: docker.io
-  # 2. 修改为你自己的镜像名称
   IMAGE_NAME: woshi17/docker-drpy-node
 
 jobs:
-  build:
+  workflow-keepalive:
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - uses: liskin/gh-workflow-keepalive@v1
+
+  build-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            tag: latest-amd64
+          - platform: linux/arm64
+            tag: latest-arm64
+          - platform: linux/arm/v7
+            tag: latest-armv7
     permissions:
       contents: read
       packages: write
-
+      id-token: write
     steps:
-      - name: Checkout repository
+      - name: Checkout source code
         uses: actions/checkout@v4
+
+      - name: Show build context content (debug)
+        run: ls -la
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -30,40 +46,55 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
+      - name: Log into Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      # 新增步骤：在运行 jq 之前，先从远程仓库下载 package.json 文件
-      - name: Download package.json for versioning
-        run: curl -L -o package.json https://raw.githubusercontent.com/hjdhnx/drpy-node/main/package.json
-
-      - name: Extract version from package.json
-        id: pkg
-        run: |
-          VERSION=$(jq -r '.version' package.json)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Extract metadata (tags, labels)
+      - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # 这里会自动使用上面 env 中定义的新镜像名
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ steps.pkg.outputs.version }}
-            type=raw,value=latest,enable={{is_default_branch}}
+          tags: type=raw,value=${{ matrix.tag }}
 
-      - name: Build and push
+      - name: Build and push image for ${{ matrix.platform }}
         uses: docker/build-push-action@v6
         with:
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
           context: .
-          file: Dockerfile
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
           push: true
+          provenance: false
+          sbom: false
+          no-cache: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  combine-images:
+    runs-on: ubuntu-latest
+    needs: build-matrix
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Log into Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Create and push manifest list
+        uses: Noelware/docker-manifest-action@0.4.3
+        with:
+          inputs: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          images: >-
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64,
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64,
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-armv7
+          push: true
