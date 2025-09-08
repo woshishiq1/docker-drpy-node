@@ -1,41 +1,100 @@
-FROM node:22-alpine AS builder
+name: Docker Publish
 
-RUN set -ex \
-  && apk add --update --no-cache \
-     git \
-     build-base \
-     python3-dev
+on:
+  schedule:
+    - cron: '00 1 * * *'  # 每天北京时间上午9点执行
+  workflow_dispatch:
 
-WORKDIR /app
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: woshi17/docker-drpy-node
 
-RUN set -ex \
-  && git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
-  && npm install -g pm2 \
-  && yarn \
-  && yarn add puppeteer
+jobs:
+  workflow-keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - uses: liskin/gh-workflow-keepalive@v1
 
-# 查看 .env.development 文件是否存在
-RUN ls -la /app/.env.development
+  build-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            tag: latest-amd64
+          - platform: linux/arm64
+            tag: latest-arm64
+          - platform: linux/arm/v7
+            tag: latest-armv7
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
-# 重命名 .env.development 为 .env
-RUN mv /app/.env.development /app/.env
+      - name: Show build context content (debug)
+        run: ls -la
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-FROM node:22-alpine
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-COPY --from=builder /app /app
+      - name: Log into Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-RUN set -ex \
-  && apk add --update --no-cache \
-     tini \
-  && rm -rf /tmp/* /var/cache/apk/*
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: type=raw,value=${{ matrix.tag }}
 
-WORKDIR /app
+      - name: Build and push image for ${{ matrix.platform }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          provenance: false
+          sbom: false
+          no-cache: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
-# 确认 .env 文件存在
-RUN ls -la /app/.env
+  combine-images:
+    runs-on: ubuntu-latest
+    needs: build-matrix
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Log into Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-EXPOSE 5757
-
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "index.js"]
+      - name: Create and push manifest list
+        uses: Noelware/docker-manifest-action@0.4.3
+        with:
+          inputs: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          images: >-
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64,
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64,
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-armv7
+          push: true
