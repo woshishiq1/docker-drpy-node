@@ -11,7 +11,7 @@ RUN set -ex \
 
 WORKDIR /app
 
-# 拉取源码 & 安装依赖
+# 拉取源码 & 安装 Node 依赖
 RUN set -ex \
   && git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
   && npm install -g pm2 \
@@ -26,6 +26,7 @@ FROM node:22-alpine
 # 拷贝构建产物
 COPY --from=builder /app /app
 
+# 安装运行依赖 + 编译工具链（armv7 必须要有）
 RUN set -ex \
   && apk add --update --no-cache \
      tini \
@@ -34,6 +35,10 @@ RUN set -ex \
      py3-pip \
      py3-setuptools \
      py3-wheel \
+     gcc \
+     g++ \
+     musl-dev \
+     make \
   && rm -rf /tmp/* /var/cache/apk/*
 
 WORKDIR /app
@@ -47,7 +52,9 @@ RUN cp /app/.env.development /app/.env && \
 # Python 虚拟环境 & 安装依赖
 RUN python3 -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
-    pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt
+    pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt && \
+    # 安装完成后清理编译工具链，减小镜像体积
+    apk del gcc g++ musl-dev make || true
 
 EXPOSE 5757
 
