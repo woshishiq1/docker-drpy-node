@@ -17,13 +17,13 @@ jobs:
         include:
           - platform: linux/amd64
             tag: latest-amd64
-            arch: amd64
+            target: runner-amd64
           - platform: linux/arm64
             tag: latest-arm64
-            arch: arm64
+            target: runner-arm64
           - platform: linux/arm/v7
             tag: latest-armv7
-            arch: armv7
+            target: runner-armv7
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -40,15 +40,14 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          build-args: |
-            TARGETARCH=${{ matrix.arch }}
+          target: ${{ matrix.target }}
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.tag }}
 
   combine-images:
