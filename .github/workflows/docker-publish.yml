@@ -2,7 +2,7 @@ name: Docker Publish
 
 on:
   schedule:
-    - cron: '00 1 * * *' # 每天北京时间上午 9 点
+    - cron: '00 1 * * *' # 每天北京时间 9 点
   workflow_dispatch:
 
 env:
@@ -39,5 +39,3 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          build-args: |
-            # 可以传递 Dockerfile 构建参数（如果需要）
