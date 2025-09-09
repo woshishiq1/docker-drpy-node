@@ -1,4 +1,4 @@
-name: Docker Publish
+name: Docker Publish (armv7)
 
 on:
   push:
@@ -10,54 +10,32 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: woshi17/docker-drpy-node
+  IMAGE_NAME: woshi17/drpy-node
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
     steps:
       # 1️⃣ Checkout 仓库
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ 安装 jq 和 git
-      - name: Install jq & git
-        run: sudo apt-get update && sudo apt-get install -y jq git
+      # 2️⃣ 安装依赖
+      - name: Setup Buildx & QEMU
+        uses: docker/setup-buildx-action@v2
 
-      # 3️⃣ Clone drpy-node 仓库到 runner
-      - name: Clone drpy-node
-        run: git clone --depth 1 https://github.com/hjdhnx/drpy-node.git drpy-node
-
-      # 4️⃣ 获取版本号
-      - name: Get version
-        id: get_version
-        run: |
-          echo "当前目录：$(pwd)"
-          ls -al drpy-node
-          cat drpy-node/package.json
-          VERSION=$(jq -r '.version' drpy-node/package.json)
-          echo "VERSION=$VERSION"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      # 5️⃣ 登录 Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      # 6️⃣ 设置 Buildx 支持多架构
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      # 7️⃣ 构建并推送多架构镜像
-      - name: Build and push multi-arch image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          platforms: linux/amd64,linux/arm/v7,linux/arm64
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }}
-            ${{ env.IMAGE_NAME }}:latest
+      # 3️⃣ 构建并 push multi-arch 镜像 (amd64 + arm64 + arm/v7)
+      - name: Build and Push
+        run: |
+          docker buildx create --use --name mybuilder || true
+          docker buildx build \
+            --platform linux/amd64,linux/arm64,linux/arm/v7 \
+            --push \
+            -t ${{ env.IMAGE_NAME }}:latest \
+            .
