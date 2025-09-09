@@ -17,45 +17,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout 仓库
+      # 1️⃣ Checkout 自己仓库（保持 workflow 文件等）
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ 安装 jq (解析 package.json)
+      # 2️⃣ 安装 jq 用于解析 package.json
       - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+        run: sudo apt-get update && sudo apt-get install -y jq git
 
-      # 3️⃣ 获取版本号
+      # 3️⃣ Clone drpy-node 仓库到 runner
+      - name: Clone drpy-node
+        run: git clone --depth 1 https://github.com/hjdhnx/drpy-node.git drpy-node
+
+      # 4️⃣ 获取版本号
       - name: Get version
         id: get_version
         run: |
-          # 调试：确认 package.json 是否存在
           echo "当前目录：$(pwd)"
-          ls -al
-          cat package.json
-          # 获取版本号
-          VERSION=$(jq -r '.version' package.json)
+          ls -al drpy-node
+          cat drpy-node/package.json
+          VERSION=$(jq -r '.version' drpy-node/package.json)
           echo "VERSION=$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # 4️⃣ 登录 Docker Hub
+      # 5️⃣ 登录 Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      # 5️⃣ 构建 Docker 镜像
+      # 6️⃣ 构建 Docker 镜像
       - name: Build Docker image
         run: |
           docker build -t ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }} .
 
-      # 6️⃣ Push Docker 镜像
+      # 7️⃣ Push Docker 镜像
       - name: Push Docker image
         run: |
           docker push ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }}
 
-      # 7️⃣ 打 latest tag 并 push
+      # 8️⃣ 打 latest tag 并 push
       - name: Tag latest and push
         run: |
           docker tag ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }} ${{ env.IMAGE_NAME }}:latest
