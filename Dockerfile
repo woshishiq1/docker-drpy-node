@@ -12,15 +12,20 @@ RUN set -ex \
      py3-pip \
      py3-setuptools \
      py3-wheel \
-     python3-dev
+     python3-dev \
+     libffi-dev \
+     openssl-dev
 
 WORKDIR /app
 
-# 拉取源码 & 安装依赖
+# 拉取源码 & 安装 Node.js 依赖
 RUN git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
   && npm install -g pm2 \
   && yarn install --production \
   && yarn add puppeteer
+
+# 安装 Python 依赖到系统路径
+RUN pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt
 
 # ===========================
 # 2. 运行阶段 (runtime)
@@ -38,19 +43,13 @@ RUN set -ex \
 
 WORKDIR /app
 
-# 拷贝源码与依赖
+# 拷贝源码与 Node 模块
 COPY --from=builder /app /app
 COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
-
-# 创建虚拟环境并安装 Python 依赖
-RUN python3 -m venv /app/.venv \
-  && . /app/.venv/bin/activate \
-  && pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt
 
 # 配置 env
 RUN cp /app/.env.development /app/.env && \
     rm -f /app/.env.development && \
-    sed -i 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' /app/.env && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
 EXPOSE 5757
