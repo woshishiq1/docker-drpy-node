@@ -1,8 +1,9 @@
 # ===========================
-# 1. 构建阶段 (带完整工具链)
+# 1. 构建阶段 (builder)
 # ===========================
 FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 
+# 安装构建依赖
 RUN set -ex \
   && apk add --no-cache \
      git \
@@ -11,9 +12,7 @@ RUN set -ex \
      py3-pip \
      py3-setuptools \
      py3-wheel \
-     python3-dev \
-     libffi-dev \
-     openssl-dev
+     python3-dev
 
 WORKDIR /app
 
@@ -23,30 +22,35 @@ RUN git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
   && yarn install --production \
   && yarn add puppeteer
 
-# 安装 Python 依赖到独立目录
-RUN pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt -t /app/pydeps
-
 # ===========================
-# 2. 运行阶段 (轻量化)
+# 2. 运行阶段 (runtime)
 # ===========================
-FROM --platform=$TARGETPLATFORM node:22-alpine
+FROM --platform=$TARGETPLATFORM node:22-alpine AS runner
 
+# 安装运行依赖
 RUN set -ex \
   && apk add --no-cache \
      tini \
      python3 \
-     py3-pip
+     py3-pip \
+     py3-setuptools \
+     py3-wheel
 
 WORKDIR /app
 
-# 复制构建产物
+# 拷贝源码与依赖
 COPY --from=builder /app /app
 COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=builder /app/pydeps /usr/local/lib/python3.*/site-packages
 
-# 处理 env 配置
+# 创建虚拟环境并安装 Python 依赖
+RUN python3 -m venv /app/.venv \
+  && . /app/.venv/bin/activate \
+  && pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt
+
+# 配置 env
 RUN cp /app/.env.development /app/.env && \
     rm -f /app/.env.development && \
+    sed -i 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' /app/.env && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
 EXPOSE 5757
