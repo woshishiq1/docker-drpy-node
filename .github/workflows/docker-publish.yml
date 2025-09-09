@@ -17,11 +17,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ 拉取仓库
+      # 1️⃣ Checkout 仓库
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2️⃣ 安装 jq (用于解析 package.json)
+      # 2️⃣ 安装 jq (解析 package.json)
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
@@ -29,6 +29,11 @@ jobs:
       - name: Get version
         id: get_version
         run: |
+          # 调试：确认 package.json 是否存在
+          echo "当前目录：$(pwd)"
+          ls -al
+          cat package.json
+          # 获取版本号
           VERSION=$(jq -r '.version' package.json)
           echo "VERSION=$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -50,7 +55,7 @@ jobs:
         run: |
           docker push ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }}
 
-      # 7️⃣ 可选：打 latest tag 并 push
+      # 7️⃣ 打 latest tag 并 push
       - name: Tag latest and push
         run: |
           docker tag ${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.version }} ${{ env.IMAGE_NAME }}:latest
