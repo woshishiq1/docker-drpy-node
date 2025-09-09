@@ -1,8 +1,33 @@
 # ===========================
-# 2. 运行阶段 (无工具链)
+# 1. 构建阶段 (带完整工具链)
 # ===========================
-FROM node:22-alpine
+FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 
+# 安装构建依赖
+RUN set -ex \
+  && apk add --no-cache \
+     git \
+     build-base \
+     python3 \
+     py3-pip \
+     py3-setuptools \
+     py3-wheel \
+     python3-dev
+
+WORKDIR /app
+
+# 拉取源码 & 安装依赖
+RUN git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
+  && npm install -g pm2 \
+  && yarn install --production \
+  && yarn add puppeteer
+
+# ===========================
+# 2. 运行阶段 (轻量化)
+# ===========================
+FROM --platform=$TARGETPLATFORM node:22-alpine
+
+# 安装运行时需要的依赖
 RUN set -ex \
   && apk add --no-cache \
      tini \
@@ -17,7 +42,7 @@ WORKDIR /app
 COPY --from=builder /app /app
 COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-# ⚡ 在 runtime 里直接安装 Python 依赖（保证和实际 Python 版本一致）
+# 在运行环境中安装 Python 依赖（保证版本匹配）
 RUN pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt
 
 # 处理 env 配置
