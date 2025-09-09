@@ -1,59 +1,39 @@
-# ===========================
-# 1. 构建阶段 (builder)
-# ===========================
 FROM node:22-alpine AS builder
 
-# 安装构建依赖
 RUN set -ex \
-  && apk add --no-cache \
+  && apk add --update --no-cache \
      git \
      build-base \
-     python3 \
-     py3-pip \
-     py3-setuptools \
-     py3-wheel \
-     python3-dev \
-     libffi-dev \
-     openssl-dev
+     python3-dev
 
 WORKDIR /app
 
-# 拉取源码 & 安装 Node.js 依赖
-RUN git clone --depth 1 https://github.com/hjdhnx/drpy-node.git . \
+RUN set -ex \
+  && git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
   && npm install -g pm2 \
-  && yarn install --production \
+  && yarn \
   && yarn add puppeteer
 
-# 安装 Python 依赖到系统路径（不使用 venv）
-RUN pip3 install --no-cache-dir --only-binary=:all: -r /app/spider/py/base/requirements.txt
+# 查看 .env.development 文件是否存在
+RUN ls -la /app/.env.development
 
-# ===========================
-# 2. 运行阶段 (runtime)
-# ===========================
+# 重命名 .env.development 为 .env
+RUN mv /app/.env.development /app/.env
+
+
 FROM node:22-alpine
 
-# 安装运行依赖
+COPY --from=builder /app /app
+
 RUN set -ex \
-  && apk add --no-cache \
+  && apk add --update --no-cache \
      tini \
-     python3 \
-     py3-pip \
-     py3-setuptools \
-     py3-wheel \
-     libffi-dev \
-     openssl-dev \
-     build-base
+  && rm -rf /tmp/* /var/cache/apk/*
 
 WORKDIR /app
 
-# 拷贝源码和 Node 模块
-COPY --from=builder /app /app
-COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
-
-# 配置 .env 和 env.json
-RUN cp /app/.env.development /app/.env && \
-    rm -f /app/.env.development && \
-    echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
+# 确认 .env 文件存在
+RUN ls -la /app/.env
 
 EXPOSE 5757
 
