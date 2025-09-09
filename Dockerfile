@@ -19,13 +19,13 @@ RUN set -ex \
 WORKDIR /app
 
 # 拉取源码 & 安装 Node.js 依赖
-RUN git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
+RUN git clone --depth 1 https://github.com/hjdhnx/drpy-node.git . \
   && npm install -g pm2 \
   && yarn install --production \
   && yarn add puppeteer
 
-# 安装 Python 依赖到系统 Python site-packages
-RUN pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt
+# 安装 Python 依赖到系统路径（不使用 venv）
+RUN pip3 install --no-cache-dir --only-binary=:all: -r /app/spider/py/base/requirements.txt
 
 # ===========================
 # 2. 运行阶段 (runtime)
@@ -46,7 +46,7 @@ RUN set -ex \
 
 WORKDIR /app
 
-# 拷贝源码与 Node 模块
+# 拷贝源码和 Node 模块
 COPY --from=builder /app /app
 COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 
