@@ -1,39 +1,48 @@
-FROM node:22-alpine AS builder
+
+#
+# Dockerfile for drpyS
+#
+
+FROM node:20-alpine AS builder
+
+ENV LANG=C.UTF-8
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 RUN set -ex \
   && apk add --update --no-cache \
      git \
-     build-base \
-     python3-dev
+     python3-dev \
+     py3-pip \
+     py3-wheel
 
 WORKDIR /app
 
 RUN set -ex \
   && git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
-  && npm install -g pm2 \
-  && yarn \
-  && yarn add puppeteer
+  && yarn && yarn add puppeteer \
+  && sed 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' .env.development > .env \
+  && rm -f .env.development \
+  && echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > config/env.json
 
-# 查看 .env.development 文件是否存在
-RUN ls -la /app/.env.development
+RUN python3 -m venv .venv
+ENV PATH="/app/.venv/bin":$PATH
+RUN pip3 install -r spider/py/base/requirements.txt
 
-# 重命名 .env.development 为 .env
-RUN mv /app/.env.development /app/.env
-
-
-FROM node:22-alpine
+FROM node:20-alpine
 
 COPY --from=builder /app /app
+ENV LANG=C.UTF-8
+ENV PYTHONUNBUFFERED=1
 
 RUN set -ex \
   && apk add --update --no-cache \
-     tini \
+     python3 tini \
   && rm -rf /tmp/* /var/cache/apk/*
 
-WORKDIR /app
+ENV PATH="/app/.venv/bin":$PATH
 
-# 确认 .env 文件存在
-RUN ls -la /app/.env
+WORKDIR /app
 
 EXPOSE 5757
 
