@@ -42,7 +42,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ./Dockerfile2
           platforms: ${{ matrix.platform }}
           push: false
           load: true   # 加载到 runner 本地 docker
