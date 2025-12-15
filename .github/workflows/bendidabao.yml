@@ -2,7 +2,7 @@ name: Docker Build Only
 
 on:
   schedule:
-    - cron: '00 1 * * *'  # 每天北京时间上午9点执行
+    - cron: '00 1 * * *'  # 每天北京时间上午9点
   workflow_dispatch:
 
 env:
@@ -20,6 +20,7 @@ jobs:
   build-matrix:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - platform: linux/amd64
@@ -28,12 +29,15 @@ jobs:
             tag: latest-arm64
           - platform: linux/arm/v7
             tag: latest-armv7
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,arm
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -45,12 +49,14 @@ jobs:
           file: ./Dockerfile2
           platforms: ${{ matrix.platform }}
           push: false
-          load: true   # 加载到 runner 本地 docker
+          load: true
           tags: ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
 
       - name: Save Docker image as artifact
         run: |
-          docker save -o image-${{ matrix.tag }}.tar ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
+          docker save -o image-${{ matrix.tag }}.tar \
+            ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
+
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
