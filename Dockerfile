@@ -26,7 +26,7 @@ WORKDIR /app
 
 # 拉源码 + 安装 Node.js 依赖
 RUN set -ex \
-  && git clone --depth 1 -q https://github.com/hjdhnx/drpy-node.git . \
+  && git clone --depth 1 -q https://github.com/woshishiq1/drpys.git . \
   && yarn && yarn add puppeteer \
   && sed 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' .env.development > .env \
   && rm -f .env.development \
