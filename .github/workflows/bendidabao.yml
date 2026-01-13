@@ -1,6 +1,6 @@
 name: Docker Build Only
 
-on:
+于:
   schedule:
     - cron: '00 1 * * *'  # 每天北京时间上午9点
   workflow_dispatch:
@@ -20,7 +20,6 @@ jobs:
   build-matrix:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
         include:
           - platform: linux/amd64
@@ -50,7 +49,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: false
           load: true
-          tags: ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
+          标签: ${{ env.IMAGE_NAME }}:${{ matrix.tag }}
 
       - name: Save Docker image as artifact
         run: |
