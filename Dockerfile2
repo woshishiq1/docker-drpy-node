@@ -2,7 +2,7 @@
 
 ARG TARGETPLATFORM
 
-FROM --platform=$TARGETPLATFORM node:20-alpine AS builder
+FROM --platform=$TARGETPLATFORM node:22-alpine AS builder
 
 ENV LANG=C.UTF-8 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -45,7 +45,7 @@ RUN pip3 install --upgrade pip setuptools wheel \
   && pip3 install -r spider/py/base/requirements.txt
 
 # ----------- 运行镜像阶段 -----------
-FROM --platform=$TARGETPLATFORM node:20-alpine
+FROM --platform=$TARGETPLATFORM node:22-alpine
 
 COPY --from=builder /app /app
 
