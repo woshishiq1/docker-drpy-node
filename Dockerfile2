@@ -27,7 +27,7 @@ WORKDIR /app
 
 # 拉源码 + 安装 Node.js 依赖
 RUN set -ex \
-  && git clone --depth 1 -b master -q https://github.com/woshishiq1/drpys.git . \
+  && git clone --depth 1 -b main -q https://github.com/woshishiq1/drpys.git . \
   && yarn \
   && if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
        yarn add puppeteer ; \
