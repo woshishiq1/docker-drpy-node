@@ -1,18 +1,20 @@
-# Dockerfile for drpyS (支持编译 pycryptodome / ujson 并集成 PHP 环境)
+# Dockerfile for drpyS (集成 PHP 环境 + 支持编译 pycryptodome / ujson)
 
 ARG TARGETPLATFORM
 
-FROM --platform=$TARGETPLATFORM node:22-alpine AS builder
+# 1. 降级为 node:20-alpine：防止 QEMU 跨平台编译 armv7 时报 Exit Code 132 (Illegal Instruction)
+FROM --platform=$TARGETPLATFORM node:20-alpine AS builder
 
 ENV LANG=C.UTF-8 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PUPPETEER_SKIP_DOWNLOAD=1
 
-# 安装构建依赖
+# 2. 补全 Python C 拓展编译工具（gcc, g++, musl-dev, libffi-dev, openssl-dev），确保 pycryptodome / ujson 等顺利编译
 RUN set -ex \
   && apk add --update --no-cache \
      git \
+     python3 \
      python3-dev \
      py3-pip \
      py3-wheel \
@@ -24,39 +26,51 @@ RUN set -ex \
      openssl-dev
 
 WORKDIR /app
+COPY . /app
 
-# 拉源码 + 安装 Node.js 依赖
-RUN set -ex \
-  && git clone --depth 1 -q https://github.com/woshishiq1/drpys.git . \
-  && yarn \
-  && if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-        yarn add puppeteer ; \
-     else \
-        yarn add puppeteer-core ; \
-     fi \
-  && sed 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' .env.development > .env \
-  && rm -f .env.development \
-  && echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > config/env.json
+# 清理无用目录、修正 Alpine 下终端类型、初始化环境变量与配置文件
+RUN rm -rf drpy-node-admin drpy-node-bundle drpy-node-mcp drpy2-quickjs && \
+    rm -rf examples install soft .nomedia .vercelignore package-bundle.js package.js package.py vercel.json && \
+    sed -i 's|const shell = os.platform() === '"'"'win32'"'"' ? '"'"'powershell.exe'"'"' : '"'"'bash'"'"'|const shell = os.platform() === '"'"'win32'"'"' ? '"'"'powershell.exe'"'"' : '"'"'sh'"'"'|' controllers/admin/terminalController.js && \
+    cp /app/.plugins.example.js /app/.plugins.js 2>/dev/null || true && \
+    rm -f /app/.plugins.example.js && \
+    mkdir -p plugins config && \
+    if [ -f /app/.env.development ]; then cp /app/.env.development /app/.env && rm -f /app/.env.development; fi && \
+    if [ -f /app/.env ]; then \
+      sed -i 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' /app/.env || true; \
+      sed -i 's|^ENABLE_TERMINAL=0|ENABLE_TERMINAL=1|' /app/.env || true; \
+    fi && \
+    echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
-# 建立虚拟环境并安装 Python 依赖
-RUN python3 -m venv .venv
+# 安装 Node.js 依赖
+RUN corepack enable && yarn && yarn add puppeteer@25.0.4
+
+# 创建 Python 虚拟环境并编译安装 Python 扩展（包含依赖 C 库的 pycryptodome 和 ujson）
+RUN python3 -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 RUN pip3 install --upgrade pip setuptools wheel \
-  && pip3 install -r spider/py/base/requirements.txt
+  && pip3 install --no-cache-dir -r /app/spider/py/base/requirements.txt
+
+# 打包编译产物
+RUN mkdir -p /tmp/drpys && \
+    cp -r /app/. /tmp/drpys/
 
 # ----------- 运行镜像阶段 -----------
-FROM --platform=$TARGETPLATFORM node:22-alpine
+FROM --platform=$TARGETPLATFORM node:20-alpine AS runner
 
-COPY --from=builder /app /app
+WORKDIR /app
+COPY --from=builder /tmp/drpys/. /app
 
 ENV LANG=C.UTF-8 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    TZ=Asia/Shanghai \
+    PATH="/app/.venv/bin:$PATH"
 
-# 运行时依赖：基础工具 + Python + PHP8.3 及完整扩展包
+# 运行期只保留运行时所需的 Python3、PHP 8.3 及其扩展组件与 tini
 RUN set -ex \
   && apk add --update --no-cache \
-     python3 \
      tini \
+     python3 \
      php83 \
      php83-cli \
      php83-curl \
@@ -70,10 +84,6 @@ RUN set -ex \
      php83-json \
   && ln -sf /usr/bin/php83 /usr/bin/php \
   && rm -rf /tmp/* /var/cache/apk/*
-
-ENV PATH="/app/.venv/bin:$PATH"
-
-WORKDIR /app
 
 EXPOSE 5757
 
