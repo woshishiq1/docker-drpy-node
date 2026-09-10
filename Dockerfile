@@ -1,4 +1,4 @@
-# Dockerfile for drpyS (支持编译 pycryptodome / ujson)
+# Dockerfile for drpyS (支持编译 pycryptodome / ujson 并集成 PHP 环境)
 
 ARG TARGETPLATFORM
 
@@ -30,9 +30,9 @@ RUN set -ex \
   && git clone --depth 1 -q https://github.com/woshishiq1/drpys.git . \
   && yarn \
   && if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-       yarn add puppeteer ; \
+        yarn add puppeteer ; \
      else \
-       yarn add puppeteer-core ; \
+        yarn add puppeteer-core ; \
      fi \
   && sed 's|^VIRTUAL_ENV[[:space:]]*=[[:space:]]*$|VIRTUAL_ENV=/app/.venv|' .env.development > .env \
   && rm -f .env.development \
@@ -52,10 +52,23 @@ COPY --from=builder /app /app
 ENV LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1
 
-# 运行时依赖
+# 运行时依赖：基础工具 + Python + PHP8.3 及完整扩展包
 RUN set -ex \
   && apk add --update --no-cache \
-     python3 tini \
+     python3 \
+     tini \
+     php83 \
+     php83-cli \
+     php83-curl \
+     php83-mbstring \
+     php83-xml \
+     php83-pdo \
+     php83-pdo_mysql \
+     php83-pdo_sqlite \
+     php83-openssl \
+     php83-sqlite3 \
+     php83-json \
+  && ln -sf /usr/bin/php83 /usr/bin/php \
   && rm -rf /tmp/* /var/cache/apk/*
 
 ENV PATH="/app/.venv/bin:$PATH"
