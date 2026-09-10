@@ -1,19 +1,16 @@
 # 声明 TARGETPLATFORM 以支持跨平台构建
 ARG TARGETPLATFORM
 
-# 构建阶段
+# ==================== 1. 构建阶段 ====================
 FROM node:22-alpine AS builder
 
-ENV PUPPETEER_SKIP_DOWNLOAD=true \
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+WORKDIR /app
 
 # 1. 安装构建与编译依赖（含 git 和 C 拓展编译工具）
 RUN apk add --no-cache \
     git make gcc g++ musl-dev build-base \
     python3 python3-dev py3-pip py3-setuptools py3-wheel \
     libffi-dev openssl-dev linux-headers
-
-WORKDIR /app
 
 # 2. 拉取上游项目源码到 /app
 RUN git clone --depth 1 -q https://github.com/woshishiq1/drpys.git .
@@ -31,8 +28,8 @@ RUN rm -rf drpy-node-admin drpy-node-bundle drpy-node-mcp drpy2-quickjs && \
     sed -i 's|^ENABLE_TERMINAL=0|ENABLE_TERMINAL=1|' /app/.env && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
-# 4. 安装 Node.js 依赖
-RUN corepack enable && yarn && yarn add puppeteer@25.0.4
+# 4. 安装 Node.js 基础依赖（不包含任何 puppeteer）
+RUN corepack enable && yarn
 
 # 5. 创建虚拟环境并安装/编译 Python 依赖（含 pycryptodome / ujson）
 RUN python3 -m venv /app/.venv && \
@@ -45,8 +42,9 @@ RUN mkdir -p /tmp/drpys && \
     cp -r /app/. /tmp/drpys/
 
 
-# 运行阶段
-FROM alpine:latest AS runner
+# ==================== 2. 运行阶段 ====================
+# 直接基于 Node 22 Alpine，天然自带 Node 环境与完整 CA 根证书
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 COPY --from=builder /tmp/drpys/. /app
@@ -54,13 +52,10 @@ COPY --from=builder /tmp/drpys/. /app
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     PYTHONUNBUFFERED=1 \
-    PUPPETEER_SKIP_DOWNLOAD=true \
-    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
     PATH="/app/.venv/bin:$PATH"
 
-# 1. 安装 Node.js 及 Chromium（适配 ARMv7 浏览器环境，加入 tini）
-RUN apk add --no-cache tini nodejs chromium nss freetype harfbuzz ca-certificates ttf-freefont
+# 1. 安装系统级进程守护工具 tini（已精简 nodejs / ca-certificates / chromium）
+RUN apk add --no-cache tini
 
 # 2. 安装 PHP 8.3 环境
 RUN apk add --no-cache \
