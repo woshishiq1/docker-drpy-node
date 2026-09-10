@@ -33,7 +33,7 @@ RUN rm -rf drpy-node-admin drpy-node-bundle drpy-node-mcp drpy2-quickjs && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
 # 4. 安装 Node.js 依赖与 Puppeteer（上游逻辑，配合 ENV 自动跳过 Chromium 下载）
-RUN corepack enable && yarn && yarn add puppeteer@25.0.4
+RUN corepack enable && yarn
 
 # 5. 创建虚拟环境并预先安装 Python 依赖（支持 ARMv7 预编译）
 RUN python3 -m venv /app/.venv && \
