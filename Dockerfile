@@ -2,15 +2,15 @@
 
 ARG TARGETPLATFORM
 
-# 1. 降级为 node:20-alpine：防止 QEMU 跨平台编译 armv7 时报 Exit Code 132 (Illegal Instruction)
-FROM --platform=$TARGETPLATFORM node:20-alpine AS builder
+# 直接使用 Node 22（在原生 ARM 硬件下构建，不会再触发 Exit Code 132）
+FROM --platform=$TARGETPLATFORM node:22-alpine AS builder
 
 ENV LANG=C.UTF-8 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PUPPETEER_SKIP_DOWNLOAD=1
 
-# 2. 补全 Python C 拓展编译工具（gcc, g++, musl-dev, libffi-dev, openssl-dev），确保 pycryptodome / ujson 等顺利编译
+# 补全 Python C 拓展编译工具（gcc, g++, musl-dev, libffi-dev, openssl-dev），确保 pycryptodome / ujson 等顺利编译
 RUN set -ex \
   && apk add --update --no-cache \
      git \
@@ -56,7 +56,7 @@ RUN mkdir -p /tmp/drpys && \
     cp -r /app/. /tmp/drpys/
 
 # ----------- 运行镜像阶段 -----------
-FROM --platform=$TARGETPLATFORM node:20-alpine AS runner
+FROM --platform=$TARGETPLATFORM node:22-alpine AS runner
 
 WORKDIR /app
 COPY --from=builder /tmp/drpys/. /app
@@ -66,7 +66,7 @@ ENV LANG=C.UTF-8 \
     TZ=Asia/Shanghai \
     PATH="/app/.venv/bin:$PATH"
 
-# 运行期只保留运行时所需的 Python3、PHP 8.3 及其扩展组件与 tini
+# 运行期安装 PHP 8.3 及其扩展组件，并清理缓存
 RUN set -ex \
   && apk add --update --no-cache \
      tini \
