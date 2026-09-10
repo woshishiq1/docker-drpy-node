@@ -59,8 +59,8 @@ ENV TZ=Asia/Shanghai \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
     PATH="/app/.venv/bin:$PATH"
 
-# 1. 安装 Node.js 及 Chromium（适配 ARMv7 浏览器环境）
-RUN apk add --no-cache nodejs chromium nss freetype harfbuzz ca-certificates ttf-freefont
+# 1. 安装 Node.js 及 Chromium（适配 ARMv7 浏览器环境，加入 tini）
+RUN apk add --no-cache tini nodejs chromium nss freetype harfbuzz ca-certificates ttf-freefont
 
 # 2. 安装 PHP 8.3 环境
 RUN apk add --no-cache \
@@ -86,4 +86,5 @@ RUN apk add --no-cache \
     ffmpeg
 
 EXPOSE 5757
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "index.js"]
