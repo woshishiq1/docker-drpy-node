@@ -39,7 +39,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile不带浏览器没有php
+          file: ./Dockerfile
           platforms: ${{ env.PLATFORM }}
           push: false
           load: true
