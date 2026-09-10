@@ -2,7 +2,7 @@
 ARG TARGETPLATFORM
 
 # ==================== 1. 构建阶段 ====================
-FROM node:22-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -43,8 +43,8 @@ RUN mkdir -p /tmp/drpys && \
 
 
 # ==================== 2. 运行阶段 ====================
-# 直接基于 Node 22 Alpine，天然自带 Node 环境与完整 CA 根证书
-FROM node:22-alpine AS runner
+# 直接基于 Node 20 Alpine，天然自带 Node 环境与完整 CA 根证书
+FROM node:20-alpine AS runner
 
 WORKDIR /app
 COPY --from=builder /tmp/drpys/. /app
