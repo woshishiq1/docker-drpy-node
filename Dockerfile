@@ -1,12 +1,12 @@
 # ==================== 1. 构建阶段 ====================
-FROM node:22-alpine AS builder
+# 锁定 Alpine 3.20 / Node 22 基础镜像，确保编译环境与运行环境版本完全一致
+FROM node:22-alpine3.20 AS builder
 
 WORKDIR /app
 
 ENV PUPPETEER_SKIP_DOWNLOAD=1 \
     NODE_OPTIONS="--max-old-space-size=1536"
 
-# 安装编译原生 node 模块所需的系统依赖
 RUN apk add --no-cache \
     git \
     make python3 py3-pip build-base \
@@ -27,14 +27,14 @@ RUN rm -rf drpy-node-admin drpy-node-bundle drpy-node-mcp drpy2-quickjs && \
     sed -i 's|^ENABLE_TERMINAL=0|ENABLE_TERMINAL=1|' /app/.env && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
-# 针对目标架构编译安装 Node.js 依赖
 RUN corepack enable && yarn && yarn add puppeteer@25.0.4
 
 RUN mkdir -p /tmp/drpys && \
     cp -r /app/. /tmp/drpys/
 
 # ==================== 2. 运行阶段 ====================
-FROM alpine:latest AS runner
+# 使用固定版本的 Alpine（推荐 3.20），彻底规避 C 库/PHP/Python 破坏性变更
+FROM alpine:3.20 AS runner
 
 WORKDIR /app
 COPY --from=builder /tmp/drpys/. /app
@@ -42,10 +42,10 @@ COPY --from=builder /tmp/drpys/. /app
 ENV TZ=Asia/Shanghai \
     PYTHONUNBUFFERED=1 \
     PUPPETEER_SKIP_DOWNLOAD=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
     PATH="/app/.venv/bin:$PATH"
 
-# 1. 使用 Alpine 标准 PHP 软件包名（无需手动 ln -sf 软链接）
-# 2. 安装 Python 依赖所需的 C 编译支持
+# 统一使用对应 Alpine 版本的稳健软件包
 RUN apk add --no-cache \
     tini \
     nodejs \
