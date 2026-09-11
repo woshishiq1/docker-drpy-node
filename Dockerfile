@@ -34,7 +34,7 @@ RUN mkdir -p /tmp/drpys && \
     cp -r /app/. /tmp/drpys/
 
 # ==================== 2. 运行阶段 ====================
-FROM alpine:3.20 AS runner
+FROM alpine:latest AS runner
 
 WORKDIR /app
 COPY --from=builder /tmp/drpys/. /app
