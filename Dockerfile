@@ -1,7 +1,7 @@
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 
-# ==================== 1. 构建阶段 ====================
+# ==================== 1. 构建阶段（只准备源码，不编译 native） ====================
 FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 
 WORKDIR /app
@@ -9,10 +9,7 @@ WORKDIR /app
 ENV PUPPETEER_SKIP_DOWNLOAD=1 \
     NODE_OPTIONS="--max-old-space-size=1536"
 
-RUN apk add --no-cache \
-    git \
-    make python3 py3-pip build-base \
-    python3-dev libffi-dev openssl-dev linux-headers
+RUN apk add --no-cache git
 
 RUN git clone --depth 1 -q https://github.com/woshishiq1/drpys.git .
 
@@ -29,12 +26,17 @@ RUN rm -rf drpy-node-admin drpy-node-bundle drpy-node-mcp drpy2-quickjs && \
     sed -i 's|^ENABLE_TERMINAL=0|ENABLE_TERMINAL=1|' /app/.env && \
     echo '{"ali_token":"","ali_refresh_token":"","quark_cookie":"","uc_cookie":"","bili_cookie":"","thread":"10","enable_dr2":"1","enable_py":"2"}' > /app/config/env.json
 
-RUN corepack enable && yarn && yarn add puppeteer@25.0.4
+# 只装 JS 依赖，不跑 install 脚本（避免在 x86 上编 native）
+RUN corepack enable && \
+    yarn --ignore-scripts && \
+    yarn add puppeteer@25.0.4 --ignore-scripts
 
 RUN mkdir -p /tmp/drpys && \
-    cp -r /app/. /tmp/drpys/
+    cp -r /app/. /tmp/drpys/ && \
+    # 去掉可能残留的错误架构 native，到 runner 再装
+    rm -rf /tmp/drpys/node_modules
 
-# ==================== 2. 运行阶段 ====================
+# ==================== 2. 运行阶段（在目标架构 armv7 上装依赖） ====================
 FROM alpine:3.20 AS runner
 
 WORKDIR /app
@@ -48,6 +50,9 @@ ENV TZ=Asia/Shanghai \
 RUN apk add --no-cache \
     tini \
     nodejs \
+    npm \
+    yarn \
+    # PHP（hi3798 上可能仍 segfault，不需要可整段删掉）
     php83 \
     php83-cli \
     php83-curl \
@@ -66,13 +71,19 @@ RUN apk add --no-cache \
     ffmpeg \
     tzdata && \
     ln -sf /usr/bin/php83 /usr/bin/php && \
+    # 编译 native / pip 需要的工具（装完再删）
     apk add --no-cache --virtual .build-deps \
-        gcc g++ musl-dev python3-dev libffi-dev openssl-dev && \
+        python3 make g++ gcc musl-dev python3-dev libffi-dev openssl-dev && \
+    # 在 armv7 上安装 Node 依赖（关键）
+    corepack enable && \
+    yarn && \
+    yarn add puppeteer@25.0.4 && \
+    # Python venv
     python3 -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
     pip install --no-cache-dir -r /app/spider/py/base/requirements.txt && \
     apk del .build-deps && \
-    rm -rf /var/cache/apk/* /tmp/* /root/.cache
+    rm -rf /var/cache/apk/* /tmp/* /root/.cache /usr/local/share/.cache
 
 EXPOSE 5757
 ENTRYPOINT ["/sbin/tini", "--"]
