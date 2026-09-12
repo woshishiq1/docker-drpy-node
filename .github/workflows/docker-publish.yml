@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY: docker.io
+  REGISTRY_DOCKERHUB: docker.io
+  REGISTRY_GHCR: ghcr.io
   IMAGE_NAME: woshi17/docker-drpy-node
 
 jobs:
@@ -50,15 +51,25 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log into GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY_GHCR }}/${{ github.repository }}
           tags: type=raw,value=${{ matrix.tag }}
 
       - name: Build and push image for ${{ matrix.platform }}
@@ -85,16 +96,33 @@ jobs:
       - name: Log into Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
           username: ${{ secrets.DOCKER_HUB_USER }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Create and push manifest list
+      - name: Log into GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push Manifest List to Docker Hub
         uses: Noelware/docker-manifest-action@0.4.3
         with:
-          inputs: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          inputs: ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}:latest
           images: >-
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64,
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64,
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-armv7
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}:latest-amd64,
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}:latest-arm64,
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME }}:latest-armv7
+          push: true
+
+      - name: Create and push Manifest List to GHCR
+        uses: Noelware/docker-manifest-action@0.4.3
+        with:
+          inputs: ${{ env.REGISTRY_GHCR }}/${{ github.repository }}:latest
+          images: >-
+            ${{ env.REGISTRY_GHCR }}/${{ github.repository }}:latest-amd64,
+            ${{ env.REGISTRY_GHCR }}/${{ github.repository }}:latest-arm64,
+            ${{ env.REGISTRY_GHCR }}/${{ github.repository }}:latest-armv7
           push: true
