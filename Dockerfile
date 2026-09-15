@@ -4,7 +4,6 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY . /app
 
-# 关键：跳过 Puppeteer 自动下载庞大的 Chromium 二进制文件
 ENV PUPPETEER_SKIP_DOWNLOAD=1
 
 RUN rm -rf drpy-node-admin drpy-node-bundle drpy-node-mcp drpy2-quickjs && \
@@ -22,8 +21,8 @@ RUN rm -rf drpy-node-admin drpy-node-bundle drpy-node-mcp drpy2-quickjs && \
 
 RUN apk add --no-cache make python3 py3-pip build-base
 
-# 保留上游的依赖安装声明，但由于前面的环境变量设置，不会下载 Chromium
-RUN corepack enable && yarn && yarn add puppeteer@25.0.4
+# 核心修正：加 --ignore-engines 避开 puppeteer 与 node 版本的报错校验
+RUN corepack enable && yarn install --ignore-engines && yarn add puppeteer@25.0.4 --ignore-engines
 
 RUN mkdir -p /tmp/drpys && \
     cp -r /app/. /tmp/drpys/
@@ -35,13 +34,14 @@ FROM alpine:latest AS runner
 WORKDIR /app
 COPY --from=builder /tmp/drpys/. /app
 
+# 核心修正：针对 Node 22 在 ARM32 上禁用 snapshot 预防段错误
 ENV TZ=Asia/Shanghai \
     PYTHONUNBUFFERED=1 \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     PUPPETEER_SKIP_DOWNLOAD=1 \
+    NODE_OPTIONS="--no-node-snapshot" \
     PATH="/app/.venv/bin:$PATH"
 
-# 仅安装必要的 Node.js、PHP、Python 及 ffmpeg 基础库，剔除所有图形和浏览器依赖
 RUN apk add --no-cache \
     nodejs \
     npm \
@@ -64,7 +64,7 @@ RUN apk add --no-cache \
     ln -sf /usr/bin/php83 /usr/bin/php && \
     apk add --no-cache --virtual .build-deps \
         gcc g++ make python3-dev libffi-dev openssl-dev linux-headers && \
-    # 重新针对 ARM32 环境链接本地依赖，彻底避免 139 段错误
+    # 原生重新构建 Node C++ 拓展
     npm rebuild && \
     python3 -m venv /app/.venv && \
     . /app/.venv/bin/activate && \
